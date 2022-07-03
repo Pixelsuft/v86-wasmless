@@ -1849,7 +1849,8 @@ CPU.prototype.call_interrupt_vector = function(interrupt_nr, is_software_int, er
         if((access & 0x80) === 0)
         {
             // present bit not set
-            throw this.debug.unimpl("#NP handler");
+            // throw this.debug.unimpl("#NP handler");
+			return;
         }
 
         if(is_software_int && dpl < this.cpl)
@@ -2946,12 +2947,14 @@ CPU.prototype.do_task_switch = function(selector, error_code)
 
     if(!descriptor.is_present)
     {
-        throw this.debug.unimpl("#NP handler");
+        // throw this.debug.unimpl("#NP handler");
+		return;
     }
 
     if(descriptor.effective_limit < 103)
     {
-        throw this.debug.unimpl("#NP handler");
+        // throw this.debug.unimpl("#NP handler");
+		return;
     }
 
     var tsr_size = this.segment_limits[reg_tr];
