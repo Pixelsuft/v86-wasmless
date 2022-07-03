@@ -1,5 +1,13 @@
 "use strict";
 
+
+if(typeof window !== "undefined" && !window.requestAnimationFrame)
+{
+    window.requestAnimationFrame =
+        window.mozRequestAnimationFrame ||
+        window.webkitRequestAnimationFrame;
+}
+
 /**
  * Adapter to use visual screen in browsers (in contrast to node)
  * @constructor
@@ -18,6 +26,10 @@ function ScreenAdapter(screen_container, bus)
         cursor_element = document.createElement("div");
 
     var
+        graphic_image_data,
+        graphic_buffer,
+        graphic_buffer32,
+		
         /** @type {number} */
         cursor_row,
 
@@ -29,6 +41,12 @@ function ScreenAdapter(screen_container, bus)
 
         /** @type {number} */
         scale_y = 1,
+
+        graphical_mode_width,
+        graphical_mode_height,
+
+        modified_pixel_min = 0,
+        modified_pixel_max = 0,
 
         changed_rows,
 
@@ -231,7 +249,6 @@ function ScreenAdapter(screen_container, bus)
         {
             var p = 3 * (row * text_mode_width + col);
 
-            dbg_assert(chr >= 0 && chr < 0x100);
             text_mode_data[p] = chr;
             text_mode_data[p + 1] = bg_color;
             text_mode_data[p + 2] = fg_color;
@@ -346,6 +363,20 @@ function ScreenAdapter(screen_container, bus)
         graphic_screen.width = width;
         graphic_screen.height = height;
 
+        //graphic_screen.style.width = width * scale_x + "px";
+        //graphic_screen.style.height = height * scale_y + "px";
+
+        // Make sure to call this here, because pixels are transparent otherwise
+        //screen.clear_screen();
+
+        graphic_image_data = graphic_context.createImageData(buffer_width, buffer_height);
+        graphic_buffer = new Uint8Array(graphic_image_data.data.buffer);
+        graphic_buffer32 = new Int32Array(graphic_image_data.data.buffer);
+
+        graphical_mode_width = width;
+        graphical_mode_height = height;
+
+        this.bus.send("screen-tell-buffer", [graphic_buffer32], [graphic_buffer32.buffer]);
         update_scale_graphic();
     };
 
@@ -518,11 +549,19 @@ function ScreenAdapter(screen_container, bus)
     {
         if(DEBUG_SCREEN_LAYERS)
         {
+            // Draw the entire buffer. Useful for debugging
+            // panning / page flipping / screen splitting code for both
+            // v86 developers and os developers
+            graphic_context.putImageData(
+                graphic_image_data,
+                0, 0
+            );
+
             // For each visible layer that would've been drawn, draw a
             // rectangle to visualise the layer instead.
             graphic_context.strokeStyle = "#0F0";
             graphic_context.lineWidth = 4;
-            layers.forEach(layer =>
+            layers.forEach((layer) =>
             {
                 graphic_context.strokeRect(
                     layer.buffer_x,
@@ -538,7 +577,7 @@ function ScreenAdapter(screen_container, bus)
         layers.forEach(layer =>
         {
             graphic_context.putImageData(
-                layer.image_data,
+                graphic_image_data,
                 layer.screen_x - layer.buffer_x,
                 layer.screen_y - layer.buffer_y,
                 layer.buffer_x,
