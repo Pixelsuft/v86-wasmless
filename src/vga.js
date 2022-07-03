@@ -255,6 +255,8 @@ function VGAScreen(cpu, bus, vga_memory_size)
     this.dac_color_index_read = 0;
     this.dac_state = 0;
 
+    this.dac_mask = 0xFF;
+
     this.dac_map = new Uint8Array(0x10);
 
     this.attribute_controller_index = -1;
@@ -307,6 +309,8 @@ function VGAScreen(cpu, bus, vga_memory_size)
     io.register_read(0x3CE, this, this.port3CE_read);
     io.register_read(0x3CF, this, this.port3CF_read);
 
+    io.register_read(0x3C6, this, this.port3C6_read);
+    io.register_write(0x3C6, this, this.port3C6_write);
     io.register_write(0x3C7, this, this.port3C7_write);
     io.register_read(0x3C7, this, this.port3C7_read);
     io.register_write(0x3C8, this, this.port3C8_write);
@@ -462,6 +466,7 @@ VGAScreen.prototype.get_state = function()
     state[58] = this.color_select;
     state[59] = this.clocking_mode;
     state[60] = this.line_compare;
+    state[61] = this.dac_mask;
 
     return state;
 };
@@ -529,6 +534,7 @@ VGAScreen.prototype.set_state = function(state)
     this.color_select = state[58];
     this.clocking_mode = state[59];
     this.line_compare = state[60];
+    this.dac_mask = state[61];
 
     this.bus.send("screen-set-mode", this.graphical_mode);
 
@@ -858,7 +864,8 @@ VGAScreen.prototype.text_mode_redraw = function()
             color = this.vga_memory[addr | 1];
 
             this.bus.send("screen-put-char", [row, col, chr,
-                this.vga256_palette[color >> 4 & 0xF], this.vga256_palette[color & 0xF]]);
+                this.vga256_palette[this.dac_mask & this.dac_map[color >> 4 & 0xF]],
+                this.vga256_palette[this.dac_mask & this.dac_map[color & 0xF]]]);
 
             addr += 2;
         }
@@ -886,7 +893,8 @@ VGAScreen.prototype.vga_memory_write_text_mode = function(addr, value)
     }
 
     this.bus.send("screen-put-char", [row, col, chr,
-            this.vga256_palette[color >> 4 & 0xF], this.vga256_palette[color & 0xF]]);
+        this.vga256_palette[this.dac_mask & this.dac_map[color >> 4 & 0xF]],
+        this.vga256_palette[this.dac_mask & this.dac_map[color & 0xF]]]);
 
     this.vga_memory[addr] = value;
 };
@@ -1542,6 +1550,16 @@ VGAScreen.prototype.port3C5_read = function()
     return 0;
 };
 
+VGAScreen.prototype.port3C6_write = function(data)
+{
+    this.dac_mask = data;
+};
+
+VGAScreen.prototype.port3C6_read = function()
+{
+    return this.dac_mask;
+};
+
 VGAScreen.prototype.port3C7_write = function(index)
 {
     // index for reading the DAC
@@ -1579,7 +1597,12 @@ VGAScreen.prototype.port3C9_write = function(color_byte)
         offset = this.dac_color_index_write % 3,
         color = this.vga256_palette[index];
 
-    color_byte = (color_byte & 0x3F) * 255 / 63 | 0;
+    if((this.dispi_enable_value & 0x20) === 0)
+    {
+        color_byte &= 0x3F;
+        const b = color_byte & 1;
+        color_byte = color_byte << 2 | b << 1 | b;
+    }
 
     if(offset === 0)
     {
@@ -1610,9 +1633,18 @@ VGAScreen.prototype.port3C9_read = function()
     var index = this.dac_color_index_read / 3 | 0;
     var offset = this.dac_color_index_read % 3;
     var color = this.vga256_palette[index];
+    var color8 = color >> (2 - offset) * 8 & 0xFF;
 
     this.dac_color_index_read++;
-    return (color >> (2 - offset) * 8 & 0xFF) / 255 * 63 | 0;
+
+    if(this.dispi_enable_value & 0x20)
+    {
+        return color8;
+    }
+    else
+    {
+        return color8 >> 2;
+    }
 };
 
 VGAScreen.prototype.port3CC_read = function()
