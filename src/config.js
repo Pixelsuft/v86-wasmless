@@ -44,6 +44,8 @@ var ENABLE_HPET = DEBUG && false;
  */
 var ENABLE_ACPI = false;
 
+/** @const */
+var WINNT_FIX = false;
 
 /**
  * @const

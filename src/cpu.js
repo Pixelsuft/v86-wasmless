@@ -273,6 +273,8 @@ function CPU(bus)
     this.debug_init();
 
     this.init2();
+	
+	this.winnt_fix = WINNT_FIX;
 
     //Object.seal(this);
 }
@@ -3812,13 +3814,11 @@ CPU.prototype.cpuid = function()
     var edx = 0;
     var ebx = 0;
 
-    var winnt_fix = false;
-
     switch(this.reg32s[reg_eax])
     {
         case 0:
             // maximum supported level
-            if(winnt_fix)
+            if(this.winnt_fix)
             {
                 eax = 2;
             }
