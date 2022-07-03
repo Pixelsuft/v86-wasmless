@@ -1,0 +1,14 @@
+*.swp
+*.swo
+tests/qemu/test-i386
+tests/jit-paging/test-jit
+closure-compiler/
+images/
+*.bak
+*.orig
+*.o
+*.img
+*.fixture
+*.fuse_hidden*
+*.DS_Store
+node_modules/
