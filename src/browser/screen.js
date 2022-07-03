@@ -132,8 +132,9 @@ function ScreenAdapter(screen_container, bus)
 
     cursor_element.style.position = "absolute";
     cursor_element.style.backgroundColor = "#ccc";
-    cursor_element.style.width = "7px";
+    cursor_element.style.width = "9px";
     cursor_element.style.display = "inline-block";
+	cursor_element.id = "text_cursor";
 
     text_screen.style.display = "block";
     graphic_screen.style.display = "none";
@@ -532,6 +533,7 @@ function ScreenAdapter(screen_container, bus)
                     else if(i === cursor_col + 1)
                     {
                         // found the cursor
+						cursor_element.style.backgroundColor = number_as_color(fg_color);
                         fragment.appendChild(cursor_element);
                         break;
                     }

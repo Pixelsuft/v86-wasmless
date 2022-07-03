@@ -257,3 +257,20 @@ h4 {
 .xterm-underline {
     text-decoration: underline;
 }
+
+@-webkit-keyframes blinker {
+	0% { visibility: visible; }
+	50% { visibility: hidden; }
+	100% { visibility: visible; }
+}
+
+@keyframes blinker {
+	0% { visibility: visible; }
+	50% { visibility: hidden; }
+	100% { visibility: visible; }
+}
+
+#text_cursor {
+	-webkit-animation: blinker steps(1) 0.83129s infinite;
+	animation: blinker steps(1) 0.83129s infinite;
+}
