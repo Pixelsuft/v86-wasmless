@@ -1,5 +1,8 @@
 "use strict";
 
+/** @const */
+let PS2_LOG_VERBOSE = false;
+
 /**
  * @constructor
  * @param {CPU} cpu
@@ -64,6 +67,18 @@ function PS2(cpu, bus)
     this.sample_rate = 100;
 
     /** @type {number} */
+    this.mouse_detect_state = 0;
+
+    /** @type {number} */
+    this.mouse_id = 0x00;
+
+    /** @type {boolean} */
+    this.mouse_reset_workaround = false;
+
+    /** @type {number} */
+    this.wheel_movement = 0;
+
+    /** @type {number} */
     this.resolution = 4;
 
     /** @type {boolean} */
@@ -103,13 +118,18 @@ function PS2(cpu, bus)
 
     this.bus.register("mouse-wheel", function(data)
     {
-        // TODO: Mouse Wheel
-        // http://www.computer-engineering.org/ps2mouse/
+        this.wheel_movement -= data[0];
+        this.wheel_movement -= data[1] * 2; // X Wheel Movement
+        this.wheel_movement = Math.min(7, Math.max(-8, this.wheel_movement));
+        this.send_mouse_packet(0, 0);
     }, this);
 
     this.command_register = 1 | 4;
+    // TODO: What should be the initial value?
+    this.controller_output_port = 0;
     this.read_output_register = false;
     this.read_command_register = false;
+    this.read_controller_output_port = false;
 
     cpu.io.register_read(0x60, this, this.port60_read);
     cpu.io.register_read(0x64, this, this.port64_read);
@@ -145,6 +165,11 @@ PS2.prototype.get_state = function()
     state[20] = this.command_register;
     state[21] = this.read_output_register;
     state[22] = this.read_command_register;
+    state[23] = this.controller_output_port;
+    state[24] = this.read_controller_output_port;
+    state[25] = this.mouse_id;
+    state[26] = this.mouse_detect_state;
+    state[27] = this.mouse_reset_workaround;
 
     return state;
 };
@@ -174,6 +199,11 @@ PS2.prototype.set_state = function(state)
     this.command_register = state[20];
     this.read_output_register = state[21];
     this.read_command_register = state[22];
+    this.controller_output_port = state[23];
+    this.read_controller_output_port = state[24];
+    this.mouse_id = state[25] || 0;
+    this.mouse_detect_state = state[26] || 0;
+    this.mouse_reset_workaround = state[27] || false;
 
     this.next_byte_is_ready = false;
     this.next_byte_is_aux = false;
@@ -322,7 +352,25 @@ PS2.prototype.send_mouse_packet = function(dx, dy)
     this.mouse_buffer.push(delta_x);
     this.mouse_buffer.push(delta_y);
 
-    dbg_log("adding mouse packets: " + [info_byte, dx, dy], LOG_PS2);
+    if(this.mouse_id === 0x04)
+    {
+        this.mouse_buffer.push(
+            0 << 5 | // TODO: 5th button
+            0 << 4 | // TODO: 4th button
+            this.wheel_movement & 0x0F
+        );
+        this.wheel_movement = 0;
+    }
+    else if(this.mouse_id === 0x03)
+    {
+        this.mouse_buffer.push(this.wheel_movement & 0xFF); // Byte 4 - Z Movement
+        this.wheel_movement = 0;
+    }
+
+    if(PS2_LOG_VERBOSE)
+    {
+        dbg_log("adding mouse packets: " + [info_byte, dx, dy], LOG_PS2);
+    }
 
     this.raise_irq();
 };
@@ -434,12 +482,51 @@ PS2.prototype.port60_write = function(write_byte)
         this.mouse_buffer.push(0xFA);
 
         this.sample_rate = write_byte;
-        dbg_log("mouse sample rate: " + h(write_byte), LOG_PS2);
+
+        switch(this.mouse_detect_state)
+        {
+            case -1:
+                if(write_byte === 60)
+                {
+                    // Detect Windows NT and turn on workaround the bug
+                    // 200->100->80->60
+                    this.mouse_reset_workaround = true;
+                    this.mouse_detect_state = 0;
+                }
+                else
+                {
+                    this.mouse_reset_workaround = false;
+                    this.mouse_detect_state = (write_byte === 200) ? 1 : 0;
+                }
+                break;
+            case 0:
+                if(write_byte === 200) this.mouse_detect_state = 1;
+                break;
+            case 1:
+                if(write_byte === 100) this.mouse_detect_state = 2;
+                else if(write_byte === 200) this.mouse_detect_state = 3;
+                else this.mouse_detect_state = 0;
+                break;
+            case 2:
+                // Host sends sample rate 200->100->80 to activate Intellimouse wheel
+                if(write_byte === 80) this.mouse_id = 0x03;
+                this.mouse_detect_state = -1;
+                break;
+            case 3:
+                // Host sends sample rate 200->200->80 to activate Intellimouse 4th, 5th buttons
+                if(write_byte === 80) this.mouse_id = 0x04;
+                this.mouse_detect_state = -1;
+                break;
+        }
+
+        dbg_log("mouse sample rate: " + h(write_byte) + ", mouse id: " + h(this.mouse_id), LOG_PS2);
+
         if(!this.sample_rate)
         {
             dbg_log("invalid sample rate, reset to 100", LOG_PS2);
             this.sample_rate = 100;
         }
+
         this.mouse_irq();
     }
     else if(this.next_read_resolution)
@@ -532,10 +619,12 @@ PS2.prototype.port60_write = function(write_byte)
             break;
         case 0xF2:
             //  MouseID Byte
-            this.mouse_buffer.push(0);
-            this.mouse_buffer.push(0);
+            dbg_log("required id: " + h(this.mouse_id), LOG_PS2);
+            this.mouse_buffer.push(this.mouse_id);
 
             this.mouse_clicks = this.mouse_delta_x = this.mouse_delta_y = 0;
+            // this.send_mouse_packet(0, 0);
+            this.raise_irq();
             break;
         case 0xF3:
             // sample rate
@@ -574,6 +663,11 @@ PS2.prototype.port60_write = function(write_byte)
             this.scaling2 = false;
             this.resolution = 4;
 
+            if(!this.mouse_reset_workaround)
+            {
+                this.mouse_id = 0x00;
+            }
+
             this.mouse_clicks = this.mouse_delta_x = this.mouse_delta_y = 0;
             break;
 
@@ -582,6 +676,13 @@ PS2.prototype.port60_write = function(write_byte)
         }
 
         this.mouse_irq();
+    }
+    else if(this.read_controller_output_port)
+    {
+        this.read_controller_output_port = false;
+        this.controller_output_port = write_byte;
+        // If we ever want to implement A20 masking, here is where
+        // we should turn the masking off if the second bit is on
     }
     else
     {
@@ -652,6 +753,9 @@ PS2.prototype.port64_write = function(write_byte)
         break;
     case 0x60:
         this.read_command_register = true;
+        break;
+    case 0xD1:
+        this.read_controller_output_port = true;
         break;
     case 0xD3:
         this.read_output_register = true;

@@ -373,19 +373,14 @@ APIC.prototype.timer = function(now)
 {
     if(this.timer_current_count === 0)
     {
-        return;
-    }
-    //dbg_log(now + " " + this.next_tick, LOG_APIC);
-
-    var steps = (now - this.next_tick) * APIC_TIMER_FREQ / (1 << this.timer_divider_shift) >>> 0;
-
-    if(steps === 0)
-    {
-        return;
+        return 100;
     }
 
-    this.next_tick += steps / APIC_TIMER_FREQ * (1 << this.timer_divider_shift);
+    const freq = APIC_TIMER_FREQ / (1 << this.timer_divider_shift);
 
+    const steps = (now - this.next_tick) * freq >>> 0;
+
+    this.next_tick += steps / freq;
     this.timer_current_count -= steps;
 
     if(this.timer_current_count <= 0)
@@ -394,9 +389,13 @@ APIC.prototype.timer = function(now)
 
         if(mode === APIC_TIMER_MODE_PERIODIC)
         {
-            // This isn't exact, because timer_current_count might already be
-            // negative at this point since timer() fires late
-            this.timer_current_count = this.timer_initial_count;
+            this.timer_current_count = this.timer_current_count % this.timer_initial_count;
+
+            if(this.timer_current_count <= 0)
+            {
+                this.timer_current_count += this.timer_initial_count;
+            }
+            dbg_assert(this.timer_current_count !== 0);
 
             if((this.lvt_timer & IOAPIC_CONFIG_MASKED) === 0)
             {
@@ -414,6 +413,8 @@ APIC.prototype.timer = function(now)
             }
         }
     }
+
+    return Math.max(0, this.timer_current_count / freq);
 };
 
 APIC.prototype.route = function(vector, mode, is_level, destination, destination_mode)
