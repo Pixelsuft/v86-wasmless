@@ -3146,10 +3146,10 @@ CPU.prototype.hlt_op = function()
 
     if((this.flags & flag_interrupt) === 0)
     {
-        this.debug.show("cpu halted");
-        this.bus.send("cpu-event-halt");
-        if(DEBUG) this.debug.dump_regs();
-        throw "HALT";
+        // this.debug.show("cpu halted");
+        // this.bus.send("cpu-event-halt");
+        // if(DEBUG) this.debug.dump_regs();
+        // throw "HALT";
     }
     else
     {
