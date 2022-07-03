@@ -169,6 +169,10 @@ function VGAScreen(cpu, bus, vga_memory_size)
     this.line_compare = 0;
 
     // End of CRTC registers
+	
+	this.text_char_width = 9;
+	this.text_char_height = 16;
+	this.text_char_wide = false;
 
     /**
      * Used for svga, e.g. banked modes
@@ -467,6 +471,9 @@ VGAScreen.prototype.get_state = function()
     state[59] = this.clocking_mode;
     state[60] = this.line_compare;
     state[61] = this.dac_mask;
+	state[62] = this.text_char_width;
+    state[63] = this.text_char_height;
+    state[64] = this.text_char_wide;
 
     return state;
 };
@@ -535,6 +542,9 @@ VGAScreen.prototype.set_state = function(state)
     this.clocking_mode = state[59];
     this.line_compare = state[60];
     this.dac_mask = state[61];
+	this.text_char_width = state[62];
+	this.text_char_height = state[63];
+	this.text_char_wide = state[64];
 
     this.bus.send("screen-set-mode", this.graphical_mode);
 
@@ -558,6 +568,9 @@ VGAScreen.prototype.set_state = function(state)
     }
     else
     {
+		if (this.text_char_width !== 9 || this.text_char_height !== 16 || this.text_char_wide) {
+			this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
+		}
         this.set_size_text(this.max_cols, this.max_rows);
         this.update_cursor_scanline();
         this.update_cursor();
@@ -1517,6 +1530,19 @@ VGAScreen.prototype.port3C5_write = function(value)
                 // Screen disable bit modified
                 this.update_layers();
             }
+			if((previous_clocking_mode ^ value) & 0x08)
+            {
+				// Each column should be duplicated
+				// We will just scale text 2 times by x
+				this.text_char_wide = (value & 0x08) !== 0;
+				this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
+            }
+            if((previous_clocking_mode ^ value) & 0x01)
+            {
+				// Char width can be 8 or 9
+				this.text_char_width = 9 ^ (value & 0x01);
+				this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
+            }
             break;
         case 0x02:
             dbg_log("plane write mask: " + h(value), LOG_VGA);
@@ -1818,6 +1844,12 @@ VGAScreen.prototype.port3D5_write = function(value)
             dbg_log("3D5 / max scan line write: " + h(value), LOG_VGA);
             this.max_scan_line = value;
             this.line_compare = (this.line_compare & 0x1FF) | (value << 3 & 0x200);
+
+			var text_char_height = (this.max_scan_line & 0x1f) + 1;
+			if (text_char_height !== this.text_char_height) {
+				this.text_char_height = (this.max_scan_line & 0x1f) + 1;
+				this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
+			}
 
             var previous_vertical_blank_start = this.vertical_blank_start;
             this.vertical_blank_start = (this.vertical_blank_start & 0x1FF) | (value << 4 & 0x200);

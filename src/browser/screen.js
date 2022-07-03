@@ -41,6 +41,15 @@ function ScreenAdapter(screen_container, bus)
 
         /** @type {number} */
         scale_y = 1,
+		
+        /** @type {number} */
+        char_width = 9,
+
+        /** @type {number} */
+        char_height = 16,
+
+        /** @type {boolean} */
+        char_wide = false,
 
         graphical_mode_width,
         graphical_mode_height,
@@ -175,6 +184,10 @@ function ScreenAdapter(screen_container, bus)
     {
         this.set_size_text(data[0], data[1]);
     }, this);
+    bus.register("screen-set-size-char", function(data)
+    {
+        this.set_size_char(data[0], data[1], data[2]);
+    }, this);
     bus.register("screen-set-size-graphical", function(data)
     {
         this.set_size_graphical(data[0], data[1], data[2], data[3]);
@@ -201,15 +214,18 @@ function ScreenAdapter(screen_container, bus)
         else
         {
             // Default 720x400, but can be [8, 16] at 640x400
-            const char_size = [9, 16];
+            const char_size = [char_wide ? 8 : char_width, char_height];
 
             const canvas = document.createElement("canvas");
-            canvas.width = text_mode_width * char_size[0];
+            canvas.width = text_mode_width * char_size[0] * (char_wide ? 2 : 1);
             canvas.height = text_mode_height * char_size[1];
             const context = canvas.getContext("2d");
             context.imageSmoothingEnabled = false;
             context.font = window.getComputedStyle(text_screen).font;
             context.textBaseline = "top";
+			if (char_wide) {
+				context.scale(2, 1);
+			}
 
             for(let x = 0; x < text_mode_width; x++)
             {
@@ -348,6 +364,21 @@ function ScreenAdapter(screen_container, bus)
         update_scale_text();
     };
 
+    /**
+     * @param {number} width
+     * @param {number} height
+     * @param {boolean} wide
+     */
+    this.set_size_char = function(width, height, wide)
+    {
+		height = 16; // TODO
+		
+		char_width = width;
+		char_height = height;
+		char_wide = wide;
+        update_scale_text();
+    };
+
     this.set_size_graphical = function(width, height, buffer_width, buffer_height)
     {
         if(DEBUG_SCREEN_LAYERS)
@@ -393,7 +424,15 @@ function ScreenAdapter(screen_container, bus)
 
     function update_scale_text()
     {
-        elem_set_scale(text_screen, scale_x, scale_y, true);
+		var current_scale_x = scale_x;
+		if (char_wide)
+			current_scale_x = current_scale_x / 9 * 16;
+		if (char_width !== 9)
+			current_scale_x = current_scale_x / 9 * char_width;
+		var current_scale_y = scale_y;
+		if (char_height !== 17) // Wtf why font height is 17px
+			current_scale_y = current_scale_y / 17 * char_height;
+        elem_set_scale(text_screen, current_scale_x, current_scale_y, true);
     }
 
     function update_scale_graphic()
@@ -446,12 +485,9 @@ function ScreenAdapter(screen_container, bus)
             }
         }
 
-        if(scale_x !== 1)
+        if(scale_x !== 1 || scale_y !== 1)
         {
             elem.style.width = rectangle.width * scale_x + "px";
-        }
-        if(scale_y !== 1)
-        {
             elem.style.height = rectangle.height * scale_y + "px";
         }
     }
@@ -466,8 +502,8 @@ function ScreenAdapter(screen_container, bus)
         {
             cursor_element.style.display = "inline";
 
-            cursor_element.style.height = Math.min(15, end - start) + "px";
-            cursor_element.style.marginTop = Math.min(15, start) + "px";
+            cursor_element.style.height = Math.min(15, end - start + 1) + "px";
+            cursor_element.style.marginTop = Math.min(15, start - 1) + "px";
         }
     };
 
