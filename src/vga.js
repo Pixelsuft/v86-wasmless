@@ -341,6 +341,8 @@ function VGAScreen(cpu, bus, vga_memory_size)
     // http://wiki.osdev.org/Bochs_VBE_Extensions
     this.dispi_index = -1;
     this.dispi_enable_value = 0;
+	
+	this.vbe_version = 0xB0C0;
 
     io.register_write(0x1CE, this, undefined, this.port1CE_write);
 
@@ -1217,15 +1219,6 @@ VGAScreen.prototype.update_vga_size = function()
         // case 4 pixels).
         var virtual_width = this.offset_register << 4;
 
-        // Pixel Width / PEL Width / Clock Select
-        if(this.attribute_mode & 0x40)
-        {
-            screen_width >>>= 1;
-            virtual_width >>>= 1;
-        }
-
-        var screen_height = this.scan_line_to_screen_row(vertical_scans);
-
         // The virtual buffer height is however many rows of data that can fit.
         // Previously drawn graphics outside of current memory address space can
         // still be drawn by setting start_address. The address at
@@ -1235,6 +1228,15 @@ VGAScreen.prototype.update_vga_size = function()
         var available_bytes = VGA_HOST_MEMORY_SPACE_SIZE[0];
 
         var virtual_height = Math.ceil(available_bytes / this.vga_bytes_per_line());
+
+        // Pixel Width / PEL Width / Clock Select
+        if(this.attribute_mode & 0x40)
+        {
+            screen_width >>>= 1;
+            virtual_width >>>= 1;
+        }
+
+        var screen_height = this.scan_line_to_screen_row(vertical_scans);
 
         this.set_size_graphical(screen_width, screen_height, 8,
             virtual_width, virtual_height);
@@ -1250,6 +1252,12 @@ VGAScreen.prototype.update_vga_size = function()
             // are just repeats
             vertical_scans >>>= 1;
         }
+
+		var text_char_height = (this.max_scan_line & 0x1f) + 1;
+		if (text_char_height !== this.text_char_height) {
+			this.text_char_height = (this.max_scan_line & 0x1f) + 1;
+			this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
+		}
 
         var height = vertical_scans / (1 + (this.max_scan_line & 0x1F)) | 0;
 
@@ -1479,7 +1487,7 @@ VGAScreen.prototype.port3C1_read = function()
         return this.dac_map[this.attribute_controller_index];
     }
 
-    switch(this.attribute_controller_index)
+    switch(this.attribute_controller_index & 0x1F)
     {
         case 0x10:
             dbg_log("3C1 / attribute mode read: " + h(this.attribute_mode), LOG_VGA);
@@ -1508,7 +1516,7 @@ VGAScreen.prototype.port3C2_write = function(value)
 
 VGAScreen.prototype.port3C4_write = function(value)
 {
-    this.sequencer_index = value;
+    this.sequencer_index = value & 7;
 };
 
 VGAScreen.prototype.port3C4_read = function()
@@ -1694,7 +1702,7 @@ VGAScreen.prototype.port3CC_read = function()
 
 VGAScreen.prototype.port3CE_write = function(value)
 {
-    this.graphics_index = value;
+    this.graphics_index = value & 0xF;
 };
 
 VGAScreen.prototype.port3CE_read = function()
@@ -1858,12 +1866,6 @@ VGAScreen.prototype.port3D5_write = function(value)
             this.max_scan_line = value;
             this.line_compare = (this.line_compare & 0x1FF) | (value << 3 & 0x200);
 
-			var text_char_height = (this.max_scan_line & 0x1f) + 1;
-			if (text_char_height !== this.text_char_height) {
-				this.text_char_height = (this.max_scan_line & 0x1f) + 1;
-				this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
-			}
-
             var previous_vertical_blank_start = this.vertical_blank_start;
             this.vertical_blank_start = (this.vertical_blank_start & 0x1FF) | (value << 4 & 0x200);
             if(previous_vertical_blank_start !== this.vertical_blank_start)
@@ -1920,6 +1922,10 @@ VGAScreen.prototype.port3D5_write = function(value)
             dbg_log("3D5 / cursor address lo write: " + h(value), LOG_VGA);
             this.cursor_address = this.cursor_address & 0xFF00 | value;
             this.update_cursor();
+            break;
+        case 0x11:
+			// 0x8e - doom, win9x logo ?
+			// 0x8c - vga ?
             break;
         case 0x12:
             dbg_log("3D5 / vdisp enable end write: " + h(value), LOG_VGA);
@@ -2100,6 +2106,10 @@ VGAScreen.prototype.port1CF_write = function(value)
 
     switch(this.dispi_index)
     {
+		case 0:
+			// Maybe set 0xB0C0 to max?
+			this.vbe_version = value;
+			break;
         case 1:
             this.svga_width = value;
             if(this.svga_width > MAX_XRES)
@@ -2179,7 +2189,7 @@ VGAScreen.prototype.svga_register_read = function(n)
     {
         case 0:
             // id
-            return 0xB0C0;
+            return this.vbe_version;
         case 1:
             return this.dispi_enable_value & 2 ? MAX_XRES : this.svga_width;
         case 2:
@@ -2353,22 +2363,13 @@ VGAScreen.prototype.vga_redraw = function()
     // Closure compiler
     if(!buffer) return;
 
-    var mask = 0xFF;
-    var colorset = 0x00;
-    if(this.attribute_mode & 0x80)
-    {
-        // Palette bits 5/4 select
-        mask &= 0xCF;
-        colorset |= this.color_select << 4 & 0x30;
-    }
-
     if(this.attribute_mode & 0x40)
     {
         // 8 bit mode
 
         for(var pixel_addr = start; pixel_addr <= end; pixel_addr++)
         {
-            var color256 = (this.pixel_buffer[pixel_addr] & mask) | colorset;
+            var color256 = this.pixel_buffer[pixel_addr] & this.dac_mask;
             var color = this.vga256_palette[color256];
 
             buffer[pixel_addr] = color & 0xFF00 | color << 16 | color >> 16 | 0xFF000000;
@@ -2378,14 +2379,10 @@ VGAScreen.prototype.vga_redraw = function()
     {
         // 4 bit mode
 
-        // Palette bits 7/6 select
-        mask &= 0x3F;
-        colorset |= this.color_select << 4 & 0xC0;
-
         for(var pixel_addr = start; pixel_addr <= end; pixel_addr++)
         {
             var color16 = this.pixel_buffer[pixel_addr] & this.color_plane_enable;
-            var color256 = (this.dac_map[color16] & mask) | colorset;
+            var color256 = this.dac_map[color16] & this.dac_mask;
             var color = this.vga256_palette[color256];
 
             buffer[pixel_addr] = color & 0xFF00 | color << 16 | color >> 16 | 0xFF000000;
