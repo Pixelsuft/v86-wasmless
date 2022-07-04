@@ -999,29 +999,23 @@ CPU.prototype.fill_cmos = function(rtc, settings)
     rtc.cmos_write(CMOS_BIOS_BOOTFLAG2, boot_order & 0xFF);
 
     // 640k or less if less memory is used
-    rtc.cmos_write(CMOS_MEM_BASE_LOW, 640 & 0xFF);
-    rtc.cmos_write(CMOS_MEM_BASE_HIGH, 640 >> 8);
+    rtc.cmos_write_lowhi(CMOS_MEM_BASE_LOW, 640);
 
     var memory_above_1m = 0; // in k
     if(this.memory_size >= 1024 * 1024)
     {
         memory_above_1m = (this.memory_size - 1024 * 1024) >> 10;
-        memory_above_1m = Math.min(memory_above_1m, 0xFFFF);
     }
 
-    rtc.cmos_write(CMOS_MEM_OLD_EXT_LOW, memory_above_1m & 0xFF);
-    rtc.cmos_write(CMOS_MEM_OLD_EXT_HIGH, memory_above_1m >> 8 & 0xFF);
-    rtc.cmos_write(CMOS_MEM_EXTMEM_LOW, memory_above_1m & 0xFF);
-    rtc.cmos_write(CMOS_MEM_EXTMEM_HIGH, memory_above_1m >> 8 & 0xFF);
+    rtc.cmos_write_lowhi(CMOS_MEM_OLD_EXT_LOW, memory_above_1m);
+    rtc.cmos_write_lowhi(CMOS_MEM_EXTMEM_LOW, memory_above_1m);
 
     var memory_above_16m = 0; // in 64k blocks
     if(this.memory_size >= 16 * 1024 * 1024)
     {
         memory_above_16m = (this.memory_size - 16 * 1024 * 1024) >> 16;
-        memory_above_16m = Math.min(memory_above_16m, 0xFFFF);
     }
-    rtc.cmos_write(CMOS_MEM_EXTMEM2_LOW, memory_above_16m & 0xFF);
-    rtc.cmos_write(CMOS_MEM_EXTMEM2_HIGH, memory_above_16m >> 8 & 0xFF);
+    rtc.cmos_write_lowhi(CMOS_MEM_EXTMEM2_LOW, memory_above_16m);
 
     // memory above 4G (not supported by this emulator)
     rtc.cmos_write(CMOS_MEM_HIGHMEM_LOW, 0);
@@ -1033,7 +1027,10 @@ CPU.prototype.fill_cmos = function(rtc, settings)
     rtc.cmos_write(CMOS_BIOS_SMP_COUNT, 0);
 
     // Used by bochs BIOS to skip the boot menu delay.
-    if (settings.fastboot) rtc.cmos_write(0x3f, 0x01);
+    if (settings.fastboot) rtc.cmos_write(0x3F, 0x01);
+
+    rtc.cmos_write(CMOS_CENTURY, 0x19); // Century in BCD
+    rtc.cmos_write(CMOS_CENTURY_PS2, 0x19); // PS2 Century in BCD for Windows XP
 };
 
 CPU.prototype.load_bios = function()

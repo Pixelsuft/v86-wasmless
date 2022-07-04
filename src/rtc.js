@@ -32,6 +32,7 @@
 /** @const */ var CMOS_CENTURY = 0x32;
 /** @const */ var CMOS_MEM_EXTMEM2_LOW = 0x34;
 /** @const */ var CMOS_MEM_EXTMEM2_HIGH = 0x35;
+/** @const */ var CMOS_CENTURY_PS2 = 0x37;
 /** @const */ var CMOS_BIOS_BOOTFLAG1 = 0x38;
 /** @const */ var CMOS_BIOS_DISKTRANSFLAG = 0x39;
 /** @const */ var CMOS_BIOS_BOOTFLAG2 = 0x3d;
@@ -353,4 +354,28 @@ RTC.prototype.cmos_write = function(index, value)
     dbg_log("cmos " + h(index) + " <- " + h(value), LOG_RTC);
     dbg_assert(index < 128);
     this.cmos_data[index] = value;
+};
+
+/**
+ * @param {number} index
+ * @param {number} value
+ */
+RTC.prototype.cmos_write_lowhi = function(index, value)
+{
+    if (value > 0xFFFF)
+        value = 0xFFFF;
+    this.cmos_write(index, value & 0xFF);
+    this.cmos_write(index + 1, value >> 8);
+};
+
+/**
+ * @param {number} index
+ * @param {number} value
+ */
+RTC.prototype.cmos_write_hilow = function(index, value)
+{
+    if (value > 0xFFFF)
+        value = 0xFFFF;
+    this.cmos_write(index, value >> 8);
+    this.cmos_write(index + 1, value & 0xFF);
 };

@@ -174,6 +174,9 @@ function VGAScreen(cpu, bus, vga_memory_size)
 	this.text_char_height = 16;
 	this.text_char_wide = false;
 
+	this.character_map_value = 0;
+	this.character_map = new Uint32Array(2);
+
     /**
      * Used for svga, e.g. banked modes
      * @type{boolean}
@@ -474,6 +477,7 @@ VGAScreen.prototype.get_state = function()
 	state[62] = this.text_char_width;
     state[63] = this.text_char_height;
     state[64] = this.text_char_wide;
+    state[65] = this.character_map;
 
     return state;
 };
@@ -545,6 +549,7 @@ VGAScreen.prototype.set_state = function(state)
 	this.text_char_width = state[62];
 	this.text_char_height = state[63];
 	this.text_char_wide = state[64];
+	this.character_map = state[65];
 
     this.bus.send("screen-set-mode", this.graphical_mode);
 
@@ -1548,6 +1553,12 @@ VGAScreen.prototype.port3C5_write = function(value)
             dbg_log("plane write mask: " + h(value), LOG_VGA);
             this.plane_write_bm = value;
             break;
+        case 0x03:
+            dbg_log("character map: " + h(value), LOG_VGA);
+			this.character_map_value = value;
+			this.character_map[0] = ((value >> 5 & 1) | (value >> 1 & 6)) << 13;
+			this.character_map[1] = ((value >> 4 & 1) | (value << 1 & 6)) << 13;
+            break;
         case 0x04:
             dbg_log("sequencer memory mode: " + h(value), LOG_VGA);
             this.sequencer_memory_mode = value;
@@ -1567,6 +1578,8 @@ VGAScreen.prototype.port3C5_read = function()
             return this.clocking_mode;
         case 0x02:
             return this.plane_write_bm;
+        case 0x03:
+            return this.character_map_value;
         case 0x04:
             return this.sequencer_memory_mode;
         case 0x06:
