@@ -229,12 +229,15 @@ function ScreenAdapter(screen_container, bus)
             const char_size = [char_wide ? 8 : char_width, char_height];
 
             canvas.width = text_mode_width * char_size[0] * (char_wide ? 2 : 1);
-            canvas.height = text_mode_height * char_size[1];
-            context.font = window.getComputedStyle(text_screen).font;
+            canvas.height = text_mode_height * /*char_size[1]*/16;
+			window.text_screen = text_screen;
+            context.font = window.getComputedStyle(text_screen).font.replace("15", (5 + Math.floor(char_height / 8 * 5)).toString());
             context.textBaseline = "top";
 			if (char_wide) {
 				context.scale(2, 1);
 			}
+			context.fillStyle = number_as_color(text_mode_data[1]);
+			context.fillRect(0, 0, canvas.width, canvas.height);
 
             for(let x = 0; x < text_mode_width; x++)
             {
@@ -253,7 +256,7 @@ function ScreenAdapter(screen_container, bus)
                 context.fillStyle = cursor_element.style.backgroundColor;
                 context.fillRect(
                     cursor_col * char_size[0],
-                    cursor_row * char_size[1] + parseInt(cursor_element.style.marginTop, 10) - 1,
+                    cursor_row * char_size[1] + Math.floor(parseInt(cursor_element.style.marginTop, 10) / 16 * char_size[1]),
                     parseInt(cursor_element.style.width, 10),
                     parseInt(cursor_element.style.height, 10)
                 );
@@ -379,12 +382,11 @@ function ScreenAdapter(screen_container, bus)
      * @param {boolean} wide
      */
     this.set_size_char = function(width, height, wide)
-    {
-		height = 16; // TODO
-		
+    {		
 		char_width = width;
 		char_height = height;
 		char_wide = wide;
+		cursor_element.style.width = (char_wide ? 16 : char_width) + "px";
         update_scale_text();
     };
 
@@ -437,13 +439,17 @@ function ScreenAdapter(screen_container, bus)
     function update_scale_text()
     {
 		var current_scale_x = scale_x;
-		if (char_wide)
+		if (char_wide) {
 			current_scale_x = current_scale_x / 9 * 16;
-		if (char_width !== 9)
+		}
+		if (char_width !== 9) {
 			current_scale_x = current_scale_x / 9 * char_width;
+		}
 		var current_scale_y = scale_y;
-		if (char_height !== 17) // Wtf why font height is 17px
-			current_scale_y = current_scale_y / 17 * char_height;
+		if (char_height !== 17) { // Wtf why font height is 17px
+			// current_scale_y = current_scale_y / 17 * char_height;
+			current_scale_y = current_scale_y / 17 * 16; // TODO
+		}
         elem_set_scale(text_screen, current_scale_x, current_scale_y, true);
     }
 
@@ -515,7 +521,7 @@ function ScreenAdapter(screen_container, bus)
             cursor_element.style.display = "inline";
 
             cursor_element.style.height = Math.min(15, end - start + 1) + "px";
-            cursor_element.style.marginTop = Math.min(15, start - 1) + "px";
+            cursor_element.style.marginTop = Math.min(15, Math.floor(start / char_height * 16)) + "px";
         }
     };
 

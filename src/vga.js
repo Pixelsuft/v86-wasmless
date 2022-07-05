@@ -1253,12 +1253,6 @@ VGAScreen.prototype.update_vga_size = function()
             vertical_scans >>>= 1;
         }
 
-		var text_char_height = (this.max_scan_line & 0x1f) + 1;
-		if (text_char_height !== this.text_char_height) {
-			this.text_char_height = (this.max_scan_line & 0x1f) + 1;
-			this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
-		}
-
         var height = vertical_scans / (1 + (this.max_scan_line & 0x1F)) | 0;
 
         if(horizontal_characters && height)
@@ -1865,6 +1859,14 @@ VGAScreen.prototype.port3D5_write = function(value)
             dbg_log("3D5 / max scan line write: " + h(value), LOG_VGA);
             this.max_scan_line = value;
             this.line_compare = (this.line_compare & 0x1FF) | (value << 3 & 0x200);
+
+			var text_char_height = (this.max_scan_line & 0x1f) + 1;
+			if (text_char_height !== this.text_char_height) {
+				this.text_char_height = (this.max_scan_line & 0x1f) + 1;
+				this.bus.send("screen-set-size-char", [this.text_char_width, this.text_char_height, this.text_char_wide]);
+				// this.update_cursor();
+				this.update_cursor_scanline();
+			}
 
             var previous_vertical_blank_start = this.vertical_blank_start;
             this.vertical_blank_start = (this.vertical_blank_start & 0x1FF) | (value << 4 & 0x200);
