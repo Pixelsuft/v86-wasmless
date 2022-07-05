@@ -51,6 +51,12 @@ function ScreenAdapter(screen_container, bus)
         /** @type {boolean} */
         char_wide = false,
 
+        /** @type {number} */
+        base_scale_x = 1,
+
+        /** @type {number} */
+        base_scale_y = 1,
+
         graphical_mode_width,
         graphical_mode_height,
 
@@ -190,7 +196,7 @@ function ScreenAdapter(screen_container, bus)
     }, this);
     bus.register("screen-set-size-graphical", function(data)
     {
-        this.set_size_graphical(data[0], data[1], data[2], data[3]);
+        this.set_size_graphical(data[0], data[1], data[2], data[3], data[4]);
     }, this);
 
 
@@ -206,21 +212,24 @@ function ScreenAdapter(screen_container, bus)
     this.make_screenshot = function()
     {
         const image = new Image();
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d", { alpha: false });
+        context.imageSmoothingEnabled = false;
 
         if(is_graphical)
         {
-            image.src = graphic_screen.toDataURL("image/png");
+            canvas.width = graphical_mode_width * base_scale_x;
+            canvas.height = graphical_mode_height * base_scale_y;
+			context.scale(base_scale_x, base_scale_y);
+			context.drawImage(graphic_screen, 0, 0, graphical_mode_width, graphical_mode_height);
         }
         else
         {
             // Default 720x400, but can be [8, 16] at 640x400
             const char_size = [char_wide ? 8 : char_width, char_height];
 
-            const canvas = document.createElement("canvas");
             canvas.width = text_mode_width * char_size[0] * (char_wide ? 2 : 1);
             canvas.height = text_mode_height * char_size[1];
-            const context = canvas.getContext("2d");
-            context.imageSmoothingEnabled = false;
             context.font = window.getComputedStyle(text_screen).font;
             context.textBaseline = "top";
 			if (char_wide) {
@@ -249,9 +258,9 @@ function ScreenAdapter(screen_container, bus)
                     parseInt(cursor_element.style.height, 10)
                 );
             }
-
-            image.src = canvas.toDataURL("image/png");
         }
+
+        image.src = canvas.toDataURL("image/png");
 
         try {
             const w = window.open("");
@@ -379,7 +388,7 @@ function ScreenAdapter(screen_container, bus)
         update_scale_text();
     };
 
-    this.set_size_graphical = function(width, height, buffer_width, buffer_height)
+    this.set_size_graphical = function(width, height, buffer_width, buffer_height, bpp)
     {
         if(DEBUG_SCREEN_LAYERS)
         {
@@ -394,6 +403,9 @@ function ScreenAdapter(screen_container, bus)
 
         graphic_screen.width = width;
         graphic_screen.height = height;
+
+		base_scale_x = (bpp == 8 && width < 640 && height < 480) ? 2 : 1;
+		base_scale_y = (base_scale_x == 2 && width >= height) ? 2 : 1;
 
         //graphic_screen.style.width = width * scale_x + "px";
         //graphic_screen.style.height = height * scale_y + "px";
@@ -437,7 +449,7 @@ function ScreenAdapter(screen_container, bus)
 
     function update_scale_graphic()
     {
-        elem_set_scale(graphic_screen, scale_x, scale_y, false);
+        elem_set_scale(graphic_screen, scale_x * base_scale_x, scale_y * base_scale_y, false);
     }
 
     function elem_set_scale(elem, scale_x, scale_y, use_scale)

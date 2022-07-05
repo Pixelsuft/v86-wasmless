@@ -939,7 +939,16 @@
         });
         emulator.add_listener("screen-set-size-graphical", function(args)
         {
-            $("info_res").textContent = args[0] + "x" + args[1];
+			var size = [args[0], args[1]];
+			if (size[0] < 640 && size[1] < 480) {
+				if (args[4] == 8) {
+					size[0] *= 2;
+				}
+				if (args[4] == 8 && args[0] >= args[1]) {
+					size[1] *= 2;
+				}
+			}
+            $("info_res").textContent = size[0] + "x" + size[1];
             $("info_bpp").textContent = args[4];
         });
 

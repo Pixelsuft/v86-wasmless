@@ -341,7 +341,7 @@ function VGAScreen(cpu, bus, vga_memory_size)
     // http://wiki.osdev.org/Bochs_VBE_Extensions
     this.dispi_index = -1;
     this.dispi_enable_value = 0;
-	
+
 	this.vbe_version = 0xB0C0;
 
     io.register_write(0x1CE, this, undefined, this.port1CE_write);
