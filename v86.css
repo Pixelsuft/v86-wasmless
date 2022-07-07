@@ -33,7 +33,8 @@
     font-family: Liberation Mono, DejaVu Sans Mono, Courier New, monospace;
     font-weight: bold;
     font-size: 15px;
-    line-height: normal;
+    line-height: 16px;
+    padding-top: 1px;
 }
 #screen, #vga {
     -webkit-transform-origin: top left;

@@ -27,7 +27,6 @@ function ScreenAdapter(screen_container, bus)
 
     var
         graphic_image_data,
-        graphic_buffer,
         graphic_buffer32,
 		
         /** @type {number} */
@@ -256,7 +255,7 @@ function ScreenAdapter(screen_container, bus)
                 context.fillStyle = cursor_element.style.backgroundColor;
                 context.fillRect(
                     cursor_col * char_size[0],
-                    cursor_row * char_size[1] + Math.floor(parseInt(cursor_element.style.marginTop, 10) / 16 * char_size[1]),
+                    cursor_row * /*char_size[1]*/16 + parseInt(cursor_element.style.marginTop, 10),
                     parseInt(cursor_element.style.width, 10),
                     parseInt(cursor_element.style.height, 10)
                 );
@@ -416,7 +415,6 @@ function ScreenAdapter(screen_container, bus)
         //screen.clear_screen();
 
         graphic_image_data = graphic_context.createImageData(buffer_width, buffer_height);
-        graphic_buffer = new Uint8Array(graphic_image_data.data.buffer);
         graphic_buffer32 = new Int32Array(graphic_image_data.data.buffer);
 
         graphical_mode_width = width;
@@ -439,16 +437,17 @@ function ScreenAdapter(screen_container, bus)
     function update_scale_text()
     {
 		var current_scale_x = scale_x;
+		var current_scale_y = scale_y;
 		if (char_wide) {
 			current_scale_x = current_scale_x / 9 * 16;
 		}
 		if (char_width !== 9) {
 			current_scale_x = current_scale_x / 9 * char_width;
 		}
-		var current_scale_y = scale_y;
-		if (char_height !== 17) { // Wtf why font height is 17px
-			// current_scale_y = current_scale_y / 17 * char_height;
-			current_scale_y = current_scale_y / 17 * 16; // TODO
+		if (char_height !== 16) {
+			// TODO
+			// current_scale_y = current_scale_y / 16 * char_height;
+			current_scale_y = current_scale_y / 16 * 16;
 		}
         elem_set_scale(text_screen, current_scale_x, current_scale_y, true);
     }
