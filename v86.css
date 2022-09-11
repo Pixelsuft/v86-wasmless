@@ -35,6 +35,7 @@
     font-size: 15px;
     line-height: 16px;
     padding-top: 1px;
+    padding-bottom: 1px;
 }
 #screen, #vga {
     -webkit-transform-origin: top left;
